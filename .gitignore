@@ -1,0 +1,13 @@
+*Backup*
+Debug
+Release
+.metadata
+.vscode
+*.orig
+*.elf
+*.o
+.settings
+.DS_Store
+build
+.mxproject
+mx.scratch
