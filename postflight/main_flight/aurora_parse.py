@@ -1,6 +1,6 @@
 
 import pandas as pd
-
+from openpyxl import load_workbook 
 
 # file path for canard cmd and encoder data
 file_path = "postflight/main_flight/aurora-flight-phase-parsley.txt"
@@ -9,7 +9,7 @@ file_path = "postflight/main_flight/aurora-flight-phase-parsley.txt"
 state_est = {"time": [], "state_id": [], "data": []} # state est data
 mcb_encoder = {"time": [], "data": []} # mcb encoder
 proc_cmd = {"time": [], "data": []} # proc board state est cmd 
-altimu_meas = {"time": [], "data_id":[], "value": []} # altimu measurements
+altimu_meas = {} # altimu measurements --> dict: time: {(data_id, xyz): value} 
 
 # timestamp processing
 proc_flight_time = 0.0
@@ -19,6 +19,9 @@ mcb_prev_time = 0.0
 
 proc_cycle = 0
 mcb_cycle = 0
+
+# sensor sort
+all_sensors = set()
 
 def corr_time(raw_time, board = ""):
     if board == "proc":
@@ -97,20 +100,28 @@ with open(file_path, "r") as file:
             # state_est_cmd.append("time": flight_time, "data": ln[11])
         
         elif ln[9] == "IMU_PROC_ALTIMU10":
-            flight_time = corr_time(raw_time, "proc")
+            flight_time = int(corr_time(raw_time, "proc"))
 
-            altimu_meas["time"].append(flight_time) # timestamp 
-            altimu_meas["data_id"].append(ln[2]) # data id (eg. SENSOR_IMU_X
-            st = set()
-            st.update(ln[i] for i in range(11, len(ln), 2))
-            altimu_meas["value"].append(st)
+            # initialize block data for timestamp keys
+            if flight_time not in altimu_meas:
+                altimu_meas[flight_time] = {}
+
+
+            # parse ln and fill block data
+            if "IMU" in ln[2]: # linear_accel/angular_velocity
+                altimu_meas[flight_time][(ln[2], ln[10])] = float(ln[11])
+                altimu_meas[flight_time][(ln[2], ln[12])] = float(ln[13])
             
+            if "MAG" in ln[2]: # mag
+                altimu_meas[flight_time][(ln[2], ln[10])] = float(ln[11])
+
+            if "BARO" in ln[2]: # presssure/temp
+                altimu_meas[flight_time][(ln[2], ln[10])] = float(ln[11])
+                altimu_meas[flight_time][(ln[2], ln[12])] = float(ln[13])
 
             
-
-
+            
     # convert lists to dataframes
-        
 
     # write each list into different sheets of the same csv file
     output_file_path = "postflight/main_flight/aurora_flight_data.xlsx"
@@ -134,6 +145,19 @@ with open(file_path, "r") as file:
         df.to_excel(writer, sheet_name='state_est_data', index=False)
 
         # write altimu meas
-        df = pd.DataFrame(altimu_meas) 
-        df.columns = ["time_ms", "data_id", "value"]
-        df.to_excel(writer, sheet_name='altimu_meas', index=False)
+        df = pd.DataFrame.from_dict(altimu_meas, orient = "index")
+        df.sort_index(inplace = True, axis=0, level = [0,1]) 
+        df = df.sort_index(axis=1, level=[0, 1])
+        df.to_excel(writer, sheet_name='altimu_meas', index=True)
+
+        
+    
+    # final formatting 
+    wb = load_workbook(output_file_path)
+    ws = wb['altimu_meas']
+    ws.cell(row=2, column=1).value = "time_ms"
+    ws.delete_rows(3)
+    wb.save(output_file_path)
+
+        
+        
