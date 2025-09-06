@@ -9,6 +9,7 @@ file_path = "postflight/main_flight/aurora-flight-phase-parsley.txt"
 state_est = {"time": [], "state_id": [], "data": []} # state est data
 mcb_encoder = {"time": [], "data": []} # mcb encoder
 proc_cmd = {"time": [], "data": []} # proc board state est cmd 
+altimu_meas = {"time": [], "data_id":[], "value": []} # altimu measurements
 
 # timestamp processing
 proc_flight_time = 0.0
@@ -94,6 +95,19 @@ with open(file_path, "r") as file:
             state_est["state_id"].append(ln[9])
             state_est["data"].append(float(ln[11]))
             # state_est_cmd.append("time": flight_time, "data": ln[11])
+        
+        elif ln[9] == "IMU_PROC_ALTIMU10":
+            flight_time = corr_time(raw_time, "proc")
+
+            altimu_meas["time"].append(flight_time) # timestamp 
+            altimu_meas["data_id"].append(ln[2]) # data id (eg. SENSOR_IMU_X
+            st = set()
+            st.update(ln[i] for i in range(11, len(ln), 2))
+            altimu_meas["value"].append(st)
+            
+
+            
+
 
     # convert lists to dataframes
         
@@ -118,3 +132,8 @@ with open(file_path, "r") as file:
         df = pd.DataFrame(state_est)
         df.columns = ["time_ms", "state_id", "data"]
         df.to_excel(writer, sheet_name='state_est_data', index=False)
+
+        # write altimu meas
+        df = pd.DataFrame(altimu_meas) 
+        df.columns = ["time_ms", "data_id", "value"]
+        df.to_excel(writer, sheet_name='altimu_meas', index=False)
